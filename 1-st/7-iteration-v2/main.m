@@ -1,0 +1,96 @@
+clc;clear;
+tic
+fc = 12e9;
+c  = 3e8;
+lambda = c / fc;
+Mx = 32;    My = 32;
+kappa = 2;
+dx = lambda / 2 / kappa;    dy = lambda / 2 / kappa;    %元素间隔
+dx_prime = lambda / 2;  dy_prime = lambda / 2;
+Mx_prime = Mx / kappa;  My_prime = My / kappa;
+delta_x_prime = [(-Mx_prime + 1) / 2 : 1 : (Mx_prime - 1) / 2].';
+delta_y_prime = [(-My_prime + 1) / 2 : 1 : (My_prime - 1) / 2].';
+Coor_x_prime = [ [(-Mx_prime + 1) / 2 : 1 : (Mx_prime - 1) / 2].' , (-Mx_prime + 1) / 2 * ones(Mx_prime,1) ];
+Coor_y_prime = [ (My_prime - 1) / 2 * ones(My_prime,1)           ,[(-My_prime + 1) / 2 : 1 : (My_prime - 1) / 2].' ,  ];
+
+
+%生成用户方向向量
+theta = ( rand(1) - 0.5 ) * pi; %取值范围[-pi/2 , pi/2]
+phi    = rand(1) * 2 * pi;      %取值范围[0 , 2 * pi]
+
+e = [ sin(theta) * cos(phi) , sin(theta) * sin(phi) , cos(phi) ];
+
+ax = exp( 1j * 2 * pi / lambda * ( Coor_x_prime(:,1) * dx_prime * e(1) + Coor_x_prime(:,2) * dy_prime * e(2)  ) );
+ay = exp( 1j * 2 * pi / lambda * ( Coor_y_prime(:,1) * dx_prime * e(1) + Coor_y_prime(:,2) * dy_prime * e(2)  ) );
+%% FFT方法
+N = 2^10;    %FFT网格点数量
+delta_n = [ (-N+1) / 2 : 1 : (N-1) /2 ].';
+F = exp( - j * 2 * pi * delta_n * delta_n.' / N   );
+% Fy = exp( - j * 2 * pi * delta_y_prime * delta_y_prime.' / Mx_prime   );
+
+ax0 = [ zeros((N-Mx_prime)/2,1) ; ax ; zeros((N-Mx_prime)/2,1) ];
+
+e_est_index(1) = find( abs( F * ax0 ) == max(abs( F * ax0 )) );
+e_est(1) = delta_n(e_est_index(1)) / N * 2;
+
+% P0 = -1;
+% for est_temp = -1 : 0.001 : 1
+%     P = abs(  ax.' * exp( -1j * 2 * pi / lambda * ( Coor_x_prime(:,1) * dx_prime * est_temp ) ) );
+%     if P > P0
+%         est = est_temp;
+%         P0 = P;
+%     end
+% end
+
+e(1)
+e_est
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+toc

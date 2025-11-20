@@ -1,0 +1,16 @@
+% 6DMA,使用全息感知方法
+clc;clear;
+kappa0 = 3; % 2 3 5 9 17
+for num = 1:1
+    [P_out(num)] = test_6DMA_run(kappa0)
+end
+
+max(P_out)
+
+fprintf('\n');
+
+
+
+%3
+% [  0.001474664349029   0.001468193130212   0.001527478764923    ]
+

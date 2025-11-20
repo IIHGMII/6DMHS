@@ -1,0 +1,392 @@
+% FPA
+% FPA不移动，保留感知功能：
+%--> 感知用户角度，并设计模拟波束
+%--> 设计数字波束，传输信号
+clc;clear;
+
+Ptx = 1; sigma0 = 1e-7; R00 = 1;
+
+
+format long
+
+% %% ****************************************初始化参数************************************************************************************************************************************************************
+for nummmmmm = 1
+    % Ptx = 10;
+    fc = 30e9;   %载波频率
+    c = 3e8;      %光速
+    lambda = c/fc;   %波长；
+    dx = lambda/4;   %x轴方向天线间隔
+    dy = lambda/4;  %y轴方向天线间隔
+    Mx = 32; My = 32; M = Mx * My;
+    Q  = 1; %每个全息超表面馈源个数
+    Dx = Mx * dx;   Dy = My * dy;
+    K_rice = 1;
+    K = 6; %用户个数
+    B = 6; %全息超表面个数，每个全息超表面上配备有M个元素
+    NUM_Position = 100; %6DMA空间位置
+    delta_x = ( 2 * [0:(Mx-1)].' - Mx + 1 )/2; delta_y = ( 2 * [ 0 : ( My - 1 ) ].' - My + 1 )/2;
+    % delta_x = [0:(Mx-1)].';   delta_y = [0:(My-1)].';
+    % Coor_Ele_init = [ kron( ones(My,1) , delta_x*dx ) , kron( delta_y*dy , ones(Mx,1) ) , zeros(M,1)  ];  %辐射元素坐标
+    Coor_Ele_init = [ kron( delta_x*dx , ones(My,1) ) , kron( ones(Mx,1) , delta_y*dy ) , zeros(M,1)  ];  %辐射元素坐标
+    dmin = 0.1;
+% figure(1); plot( Coor_Ele_init(:,1) , Coor_Ele_init(:,2) , 'o' )
+% % 
+%% 引入全息超表面传输模型
+Coor_Feed    = [ 0.002984305671304 , 0.001586131606604 , 0 ];   %馈源坐标
+% Coor_Feed    = [ 0 , 3.838239570983593e-04 , 0 ];
+Dis_Feed2Ele = sqrt( ( Coor_Ele_init - Coor_Feed ).^2 * ones(3,1) );    %馈源到元素的距离
+V_F          = exp( - 1j * 2*pi*sqrt(3)/lambda * Dis_Feed2Ele );    %馈源响应向量
+end
+
+for  num = 1 : 1
+%% 6DMA初始空间姿态
+% Coor_Ele表示6DMA天线坐标，normal_vector是UPA的法向量
+[ Coor_Ele , normal_vector , Rot_Matrix , q1 ] = Orientation_Initial(B,Coor_Ele_init,0);
+Rot_Matrix0 = Rot_Matrix;
+%% 针对初始6DMA位置，生成无线信道
+[ h , e0 , theta0, phi0 , theta_scatterer0 , phi_scatterer0 , Iota , eta , Omega ] = Channel_Generation_init( K,B,M,Mx,My,normal_vector,K_rice,Coor_Ele,lambda , Rot_Matrix );
+%% 生成全息感知
+[ error_theta , error_phi , error_varphi , est_direc_vector_rec  ] = Sensing_Holographic_HalfWave1(B,M,Mx,My,lambda,delta_x,delta_y,dx,dy,K,h,Rot_Matrix,e0);
+% est_direc_vector_rec：指向用户的方向向量
+% normal_vector_rot：全息超表面的法向量
+% Rot_Matrix：旋转矩阵
+end
+
+
+
+
+
+%% 生成B个离散空间点的波束增益向量
+B1 = 20; %一共有64个空间离散点位
+% e = [ error_theta , error_phi , error_varphi ].'; % 估计方向向量：e \in e*K
+for k = 1:B, e(:,k) = est_direc_vector_rec{k}; end
+
+for k = 1:K
+    %注意，dx = ( 2 * [0:(Mx-1)].' - Mx + 1 )/2
+    % Rot_Matrix0是旋转到初始位置的矩阵
+    Px{k}    = dx * Rot_Matrix0{k} * [1;0;0];
+    Py{k}    = dy * Rot_Matrix0{k} * [0;1;0];
+end
+
+
+%% 优化模拟波束
+% 利用感知信息，设计模拟波束
+Xtr = ones(B,K);
+coff   = diag( ones(K,1) ); %全息超表面波束系数
+% 初始化波束增益，模拟波束
+m_temp = zeros(M,B); %模拟波束增益
+
+for k = 1:K
+    for b = 1:B
+        if normal_vector{b}.' * est_direc_vector_rec{k} > 0
+            a_st(:,k,b) =  exp( 1j * 2*pi/lambda * ( q1(b,:) * e(:,k) +  kron( delta_x * ( Px{b}.' * e(:,k) ) , ones(My,1) ) + kron( ones(Mx,1) , delta_y * ( Py{b}.' * e(:,k) ) )  ) ) ;
+        else
+            a_st(:,k,b)  = zeros(M,1);
+        end
+        m_temp(:,b)    = m_temp(:,b)  +  coff(k,b) * (  real( V_F .* a_st(:,k,b) + 1 ) / 2 )  ;
+    end
+end
+mm = m_temp;
+for b = 1:B
+    for k = 1:K
+        A_ST(k,:,b) = real( V_F.' .* a_st(:,k,b).' + 1 )/2 ;
+    end
+end
+
+
+psi = 0.1 * rand(K,K);
+
+
+for ite_num = 1:10
+
+cvx_begin
+variable coff(K,B)
+variable P0(1)
+expressions mm(M,B) Gain_Beam(K,1) gain_beam_temp(K,B,K) gain_vec(K,K)
+
+for b = 1:B, mm(:,b) = coff(:,b).' * A_ST(:,:,b); end
+
+for k0 = 1:K
+    for b0 = 1:B
+        for k1 = 1:K
+            gain_beam_temp(k1,b0,k0) = a_st(:,k0,b0).' * diag(V_F * Xtr(b0,k1) ) * mm(:,b0);
+        end
+    end
+end
+
+for k = 1:K
+    for k1 = 1:K
+        gain_vec(k1,k) = ones(1,B) * gain_beam_temp(k1,:,k)';
+    end
+end
+
+for k = 1:K
+    Gain_Beam(k) = 2 * real( psi(:,k)' * gain_vec(:,k) ) - psi(:,k)' * psi(:,k);
+end
+
+maximize P0
+subject to
+Gain_Beam >= P0;
+for b0 = 1:B
+    sum( coff(:,b0) ) == 1;
+end
+0<= coff <= 1;
+ 
+cvx_end
+
+for k = 1:K
+    psi(:,k) = gain_vec(:,k);
+end
+
+
+cvx_begin
+variable Xtr(B,K) complex
+variable P0(1)
+expressions Gain_Beam(K,1) gain_beam_temp(K,B,K) gain_vec(K,K)
+
+
+for k0 = 1:K
+    for b0 = 1:B
+        for k1 = 1:K
+            gain_beam_temp(k1,b0,k0) = a_st(:,k0,b0).' * diag(V_F * Xtr(b0,k1) ) * mm(:,b0);
+        end
+    end
+end
+
+for k = 1:K
+    for k1 = 1:K
+        gain_vec(k1,k) = ones(1,B) * gain_beam_temp(k1,:,k)';
+    end
+end
+
+for k = 1:K
+    Gain_Beam(k) = 2 * real( psi(:,k)' * gain_vec(:,k) ) - psi(:,k)' * psi(:,k);
+end
+
+maximize P0
+subject to
+Gain_Beam >= P0;
+for b0 = 1:B
+   sum( sum( pow_abs( Xtr , 2 ) ) ) <= Ptx;
+end
+ 
+cvx_end
+
+for k = 1:K
+    psi(:,k) = gain_vec(:,k);
+end
+
+Beam_Gain( ite_num ) = cvx_optval
+
+end
+
+
+
+
+
+%% 生成信道
+% Omega0 = 10^( - ( 32.4 + 17.3 * log10( 10 ) + 20 * log10( fc/1e9 ) ) / 10 );
+Omega0 = Omega(1,1);
+% 第k个用户的信道增益，包含有Iota个散射链路
+% Iota = 30;  
+% eta = zeros(K,Iota);
+% for k = 1:K
+%     for iota = 1 : Iota
+%         eta(k,iota) = 1/sqrt(2) * normrnd( 0,1,1,1 ) + 1j/sqrt(2) * normrnd( 0,1,1,1 );
+%     end
+% end
+
+% 第k个用户的散射角度，包含有Iota个散射链路
+es = zeros(3,K,Iota); theta_scatterer = zeros(K,Iota); phi_scatterer = zeros(K,Iota);
+theta_scatterer = theta_scatterer0;     phi_scatterer = phi_scatterer0;
+for k = 1:K
+    for iota = 1 : Iota
+%         theta_scatterer(k,iota) = 2 * ( rand(1) - 0.5 ) * 2 * pi; %水平角
+%         phi_scatterer(k,iota)   = 2 * ( rand(1) - 0.5 ) * 2 * pi; %俯仰角
+        es(:,k,iota)              = [ sin( phi_scatterer(k,iota) ) * cos( theta_scatterer(k,iota) ) ; sin( phi_scatterer(k,iota) ) * sin( theta_scatterer(k,iota) ) ; cos( phi_scatterer(k,iota) ) ];
+    end
+end
+
+% 生成无线信道
+H = zeros( B*M , K );
+for k = 1:K
+    for iota = 0:Iota
+        for b = 1:B
+            if iota == 0
+                if normal_vector_rot{b}.' * e0{k} > 0
+                    H( (b-1)*M+1 : b*M , k ) = H( (b-1)*M+1 : b*M , k ) + sqrt( K_rice/(1+K_rice) ) * sqrt(Omega0) * exp( 1j * 2*pi/lambda * ( s(:,b).' * q * e0{k} +  kron( delta_x * ( Px{b}.' * e0{k} ) , ones(My,1) ) + kron( ones(Mx,1) , delta_y * ( Py{b}.' * e0{k} ) )  ) ) ;
+                end
+            else
+                if normal_vector_rot{b}.' * es(:,k,iota) > 0
+                    H( (b-1)*M+1 : b*M , k ) = H( (b-1)*M+1 : b*M , k ) + sqrt( 1/(1+K_rice) ) * sqrt(Omega0) * eta(k,iota) * exp( 1j * 2*pi/lambda * ( s(:,b).' * q * es(:,k,iota) +  kron( delta_x * ( Px{b}.' * es(:,k,iota) ) , ones(My,1) ) + kron( ones(Mx,1) , delta_y * ( Py{b}.' * es(:,k,iota) ) )  ) ) ;
+                end
+            end
+        end
+    end
+end
+
+%% 不优化模拟波束，只优化数字波束
+% 生成等效信道
+for b = 1:B
+    for k = 1:K
+        H_eff(b,k) = H( (b-1)*M+1 : b*M , k ).' * diag( mm(:,b) ) * V_F; %等效于有B个射频链路，K个用户的MISO信道
+    end
+end
+
+% 初始化优化参数
+norm_coff = 1;
+psi1 = 0.01 * rand(K,K);   psi2 = 0.000001 * rand(K,1);
+rho  = 0.01 * rand(K,1); %功率分割因子,rho用于传能，(1-rho)用于通信
+P_out_ite = [];
+for ite_num = 1:10
+psi_old = psi2;
+%% 优化数能性能
+cvx_begin
+cvx_solver mosek
+variable Xtr(B,K) complex
+variable R0(1)
+expressions R_temp(K,K) R_thro(K,1)
+
+for k  = 1:K
+    for k1 = 1:K
+        if k ~= k1
+            R_temp(k1,k) = quad_form( H_eff(:,k).' * Xtr(:,k1) , 1 );
+        else
+            R_temp(k1,k) = 0;
+        end
+    end
+end
+
+for k = 1:K
+    R_thro(k)      = ( 2 * sqrt(1-rho(k)) * real( psi2(k)' * Xtr(:,k)' * conj( H_eff(:,k) ) ) - abs(psi2(k))^2 * ( (1-rho(k)) * sum( R_temp(:,k) ) + sigma0 ) )/norm_coff;
+end
+
+maximize R0
+subject to
+R_thro >= R0;
+sum( sum( pow_abs( Xtr , 2 ) ) ) <= Ptx;
+
+cvx_end
+
+for k = 1:K
+%     psi1(:,k) = P_temp(:,k);
+    psi2(k)   = sqrt(1-rho(k)) * Xtr(:,k)' * conj( H_eff(:,k) ) / ( (1-rho(k)) * sum( R_temp(:,k) ) + sigma0 ) ;
+end
+
+P_out_ite(ite_num) = R0 * norm_coff;
+
+norm_coff = norm(psi2,2);
+
+if sum( isnan(psi2) ) >= 1
+    psi2 = psi_old;
+end
+
+
+end
+
+
+
+
+
+
+
+
+
+for ite_num = 1:20
+
+%% 优化数能性能
+cvx_begin
+cvx_solver mosek
+variable Xtr(B,K) complex
+variable P0(1)
+expressions P_temp(K,K) P_EH(K,1) R_temp(K,K) R_thro(K,1)
+
+for k  = 1:K
+    for k1 = 1:K
+        P_temp(k1,k) =  Xtr(:,k1)' * conj( H_eff(:,k) ) ;
+        if k ~= k1
+            R_temp(k1,k) = quad_form( H_eff(:,k).' * Xtr(:,k1) , 1 );
+        else
+            R_temp(k1,k) = 0;
+        end
+    end
+end
+
+for k = 1:K
+    P_EH(k,1) =  2 * sqrt(rho(k)) * real(  psi1(:,k)' * P_temp(:,k)  ) - abs( psi1(:,k)' * psi1(:,k) ) ;
+    
+    R_thro(k)      = 2 * sqrt(1-rho(k)) * real( psi2(k)' * Xtr(:,k)' * conj( H_eff(:,k) ) ) - abs(psi2(k))^2 * ( (1-rho(k)) * sum( R_temp(:,k) ) + sigma0 ) ;
+
+end
+
+
+
+maximize P0
+subject to
+P_EH >= P0;
+R_thro    >= R00 ;
+sum( sum( pow_abs( Xtr , 2 ) ) ) <= Ptx;
+cvx_end
+
+for k = 1:K
+    psi1(:,k) =  sqrt(rho(k)) * P_temp(:,k);
+    psi2(k)   = sqrt(1-rho(k)) * Xtr(:,k)' * conj( H_eff(:,k) ) / ( (1-rho(k)) * sum( R_temp(:,k) ) + sigma0 ) ;
+end
+
+
+%% 
+cvx_begin
+cvx_solver mosek
+variable rho(K,1) 
+variable P0(1)
+expressions P_temp(K,K) P_EH(K,1) R_temp(K,K) R_thro(K,1)
+
+for k  = 1:K
+    for k1 = 1:K
+        P_temp(k1,k) =  Xtr(:,k1)' * conj( H_eff(:,k) ) ;
+        if k ~= k1
+            R_temp(k1,k) = quad_form( H_eff(:,k).' * Xtr(:,k1) , 1 );
+        else
+            R_temp(k1,k) = 0;
+        end
+    end
+end
+
+for k = 1:K
+    P_EH(k,1) =  2 * sqrt(rho(k)) * real(  psi1(:,k)' * P_temp(:,k)  ) - abs( psi1(:,k)' * psi1(:,k) ) ;
+    R_thro(k)      = 2 * sqrt(1-rho(k)) * real( psi2(k)' * Xtr(:,k)' * conj( H_eff(:,k) ) ) - abs(psi2(k))^2 * ( (1-rho(k)) * sum( R_temp(:,k) ) + sigma0 ) ;
+end
+
+maximize P0
+subject to
+P_EH    >= P0;
+R_thro  >= R00 ;
+0 <= rho <= 1;
+cvx_end
+
+for k = 1:K
+    psi1(:,k) =  sqrt(rho(k)) * P_temp(:,k);
+    psi2(k)   = sqrt(1-rho(k)) * Xtr(:,k)' * conj( H_eff(:,k) ) / ( (1-rho(k)) * sum( R_temp(:,k) ) + sigma0 ) ;
+end
+
+
+
+P_out_ite(ite_num) = cvx_optval;
+
+end
+
+
+
+figure(2); plot( P_out_ite , '-o' )
+
+
+
+
+
+
+
+
+
+
+
+fprintf('\n');
