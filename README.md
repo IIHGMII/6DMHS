@@ -188,10 +188,13 @@ If you use this code in your research, please cite:
 @article{wang2024sixd,
   title={6D Movable Holographic Surface Assisted Integrated Data and Energy Transfer: A Sensing Enhanced Approach},
   author={Wang, Zhonglun and Zhao, Yizhe and Hu, Gangming and Zheng, Yali and Yang, Kun},
-  journal={[Journal Name]},
+  journal={To be published},
+  note={Preprint available},
   year={2024}
 }
 ```
+
+*Note: Journal name will be updated once the paper is published.*
 
 ## Key Results
 
@@ -216,7 +219,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## License
 
-This project is for academic research purposes. Please refer to the paper for detailed methodology and results.
+This project is for academic research purposes only. The code is provided as-is for reproducing the results from the research paper. For commercial use or redistribution, please contact the authors. Please refer to the paper for detailed methodology and results.
 
 ## Contact
 
@@ -226,7 +229,7 @@ For questions or issues, please:
 
 ## Acknowledgments
 
-This work was supported by [funding information from paper].
+Please refer to the research paper for funding information and acknowledgments.
 
 ---
 

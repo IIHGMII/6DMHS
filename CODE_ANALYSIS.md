@@ -81,6 +81,10 @@ B = 4;  % Number of holographic surfaces
 **Key Implementation**:
 ```matlab
 % FFT matrix for angle estimation
+% N: Number of FFT sampling points (e.g., 1024)
+% delta_n: Sample index vector from -(N-1)/2 to (N-1)/2
+delta_n = [(-N + 1) / 2:1:(N - 1) / 2].';
+% F: FFT transformation matrix for 2D angle extraction
 F = exp(-1j * 2*pi * (delta_n * delta_n.') / N);
 ```
 
@@ -131,10 +135,22 @@ F = exp(-1j * 2*pi * (delta_n * delta_n.') / N);
 
 **Key Implementation**:
 ```matlab
-% Generate discrete spatial points
+% Generate discrete spatial points on a sphere
+% B1: Number of discrete spatial positions (e.g., 40)
 [X, Y, Z] = Orientation_uniformSpherePoints(B1);
+
 % Calculate steering vectors for each position
-a_st_set{k0, b0, k1} = exp(1j * 2*pi/lambda * (a1 * e(:, k1)));
+% k0: RHS index, b0: position index, k1: user index
+% lambda: wavelength, a1: element positions after rotation
+% e(:, k1): direction vector to user k1
+for k0 = 1:K
+    for b0 = 1:B1
+        for k1 = 1:K
+            a1 = q(b0, :) + (Rot_Matrix{k0} * Coor_Ele_init.').';
+            a_st_set{k0, b0, k1} = exp(1j * 2*pi/lambda * (a1 * e(:, k1)));
+        end
+    end
+end
 ```
 
 **Corresponding Paper Equations**:
