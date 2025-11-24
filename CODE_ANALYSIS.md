@@ -11,6 +11,27 @@ The paper proposes a three-stage protocol:
 2. **Orientation Adjustment Stage**: Optimize the spatial positions and holographic beamforming of 6DMHS
 3. **Downlink Transmission Stage**: Optimize digital beamforming and power allocation for IDET transmission
 
+## Quick Reference Tables
+
+### Core Files Quick Reference
+
+| File Name | Category | Paper Section | Main Function |
+|-----------|----------|--------------|--------------|
+| `RUN_OPT_Protocol.m` | Main Flow | Section III-B | Complete three-stage protocol execution |
+| `Sensing_Algorithm.m` | Sensing | Section IV-A | Holographic sensing and angle estimation |
+| `optimize_system.m` | Optimization | Section IV-B | Joint optimization of position and beamforming |
+| `calculate_EH_power.m` | Transmission | Section II-C | Calculate energy harvesting power |
+| `Channel_Generation_init.m` | Channel | Section II-B | Rician channel generation |
+| `Orientation_Initial.m` | Initialization | Section II-A | 6DMHS orientation initialization |
+
+### Testing and Plotting Files Quick Reference
+
+| File Name | Corresponding Figure | Function |
+|-----------|---------------------|----------|
+| `plot_EH_vs_Pt.m` | Fig. 5 | EH power vs transmit power |
+| `Test_Sensing.m` | Fig. 7-8 | Sensing performance testing |
+| `Test_6DMA.m` | Fig. 5 | Performance comparison of different configurations |
+
 ## Code File Classification and Functions
 
 ### I. Main Control Flow Files
