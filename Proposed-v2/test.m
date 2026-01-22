@@ -45,7 +45,7 @@ NUM = 1000;
 parfor  num = 1 : NUM
 %% 6DMA初始空间姿态
 % Coor_Ele表示6DMA天线坐标，normal_vector是UPA的法向量
-[ Coor_Ele , normal_vector , Rot_Matrix ] = Orientation_Initial(B,Coor_Ele_init);
+[ Coor_Ele , normal_vector , Rot_Matrix ] = Orientation_Initial(B,Coor_Ele_init,0);
 %% 针对初始6DMA位置，生成无线信道
 [ h , e0 , theta0, phi0 , theta_scatterer0 , phi_scatterer0 , Iota , eta , Omega ] = Channel_Generation_init( K,B,M,Mx,My,normal_vector,K_rice,Coor_Ele,lambda , Rot_Matrix );
 %% 生成全息感知
