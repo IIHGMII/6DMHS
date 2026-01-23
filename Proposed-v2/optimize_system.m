@@ -195,7 +195,7 @@ for ITE_NUM = 1:2  % 减少迭代次数加速
     
     % 波束优化
     for b = 1:B
-        mm(:, b) = real(conj(V_F0).' .* conj(a_st(:, b, b)).' + 1) / 2;
+        mm(:, b) = real(conj(V_F0) .* conj(a_st(:, b, b)) + 1) / 2;
     end
     
     % 数字波束优化（修复CVX错误）

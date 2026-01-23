@@ -1,12 +1,19 @@
 function [fun_out] = fun_run_R00( R00 , H_eff , rho , psi1 , psi2 , sigma0 , Ptx , B , K  )
 
+% Prefer MOSEK if available; otherwise keep CVX default solver.
+if exist('cvx_solver', 'file') == 2
+    try
+        cvx_solver('mosek');
+    catch
+        % ignore
+    end
+end
 
 ite_num = 1;
 while true
 
 %% 优化数能性能
-cvx_begin
-cvx_solver mosek
+cvx_begin quiet
 variable Xtr(B,K) complex
 variable P0(1)
 expressions P_temp(K,K) P_EH(K,1) R_temp(K,K) R_thro(K,1)
@@ -54,8 +61,7 @@ if sum( isnan( psi2 ) ) >= 1 , P_out_ite(ite_num) = max(P_out_ite) ; break ; end
 
 
 %% 
-cvx_begin
-cvx_solver mosek
+cvx_begin quiet
 variable rho(K,1) nonnegative
 variable P0(1)
 expressions P_temp(K,K) P_EH(K,1) R_temp(K,K) R_thro(K,1)
@@ -107,7 +113,10 @@ if ite_num >=50, break; end
 ite_num = ite_num + 1;
 
 end
-figure;plot(P_out_ite)
+if nargout == 0
+    figure;
+    plot(P_out_ite);
+end
 fun_out = max(P_out_ite);
 
 end
