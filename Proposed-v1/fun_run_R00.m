@@ -22,11 +22,13 @@ end
 
 % 预分配，避免在早期异常(例如CVX不可行导致psi2为NaN)时引用未定义变量
 P_out_ite = -inf(1, opts.max_iter);
+cvx_calls = 0;
 
 ite_num = 1;
 while true
 
 %% 优化数能性能（给定rho）
+cvx_calls = cvx_calls + 1;
 if opts.quiet
     cvx_begin quiet
 else
@@ -90,6 +92,7 @@ end
 
 
 %% 
+cvx_calls = cvx_calls + 1;
 if opts.quiet
     cvx_begin quiet
 else
@@ -158,6 +161,9 @@ ite_num = ite_num + 1;
 end
 history = struct();
 history.P_out_ite = P_out_ite;
+history.fp_iters = ite_num;
+history.cvx_calls = cvx_calls;
+history.opts = opts;
 
 if opts.do_plot
     figure; plot(P_out_ite);

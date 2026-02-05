@@ -1,6 +1,26 @@
-function [P_out,Beam_Gain_Ite] = RUN_OPT_Protocol( K_rice )
+function [P_out,Beam_Gain_Ite,run_stats] = RUN_OPT_Protocol( K_rice )
 while true
 tic
+
+% ===================== 运行统计（不改变算法逻辑）=====================
+run_stats = struct();
+run_stats.time_stage1_ms = NaN;
+run_stats.time_stage2_ms = NaN;
+run_stats.time_stage3_ms = NaN;
+run_stats.iter_stage2_AO = NaN;
+run_stats.iter_stage3_AO = NaN;
+run_stats.iter_stage3_FP = NaN;
+run_stats.cvx_calls_stage2 = 0;
+run_stats.cvx_calls_stage3 = 0;
+run_stats.cvx_calls_total  = 0;
+
+iter_stage2_AO_cnt = 0;
+iter_stage3_AO_cnt = 0;
+iter_stage3_FP_cnt = NaN;
+
+t_stage2 = [];
+t_stage3 = [];
+% ====================================================================
 
 kappa0 = 1; % 0 1 2 3 4
 N = 1024;
@@ -70,7 +90,9 @@ for  num = 1 : 1
 %% 生成全息感知
 
 % 所提感知算法
+t_stage1 = tic;
 [est,est_L,est_error] = Sensing_Algorithm(K,B,Iota,Mx,My,M_x_r,M_y_c,h_r,h_c,Rot_Matrix,e0,K_rice,lambda,e2,sigma0,Omega,eta,N,d,kappa0);
+run_stats.time_stage1_ms = toc(t_stage1) * 1000;
 
 est_error
 
@@ -84,6 +106,7 @@ end
 % est = e0
 %% 调整旋转角度
 % 旋转最大增益角
+t_stage2 = tic;
 for k = 1:K
 n1 = [ 0.02 ; 0.01 ; sqrt( 1 - 0.02^2 - 0.01^2 ) ]; %最大增益方向
 n2 = est{k}; %用户方向
@@ -301,6 +324,7 @@ end
 psi = 0.1 * rand(K,K);
 
 for ITE_NUM = 1:5
+iter_stage2_AO_cnt = iter_stage2_AO_cnt + 1;
 
 
 Gain_Beam_Fair = min( Gain_Beam ) ; %公平波束增益
@@ -413,6 +437,7 @@ end
 % for b = 1:B, mm(:,b) = coff(:,b).' * A_ST(:,:,b); end
 
 % 优化全息波束
+run_stats.cvx_calls_stage2 = run_stats.cvx_calls_stage2 + 1;
 cvx_begin
 variable Xtr(B,K) complex
 variable P0(1)
@@ -468,6 +493,8 @@ Beam_Gain_Ite(ITE_NUM) = P0;
 
 
 end
+run_stats.time_stage2_ms = toc(t_stage2) * 1000;
+run_stats.iter_stage2_AO = iter_stage2_AO_cnt;
 
 Pt = 40 ;
 Ptx = 10^( (Pt - 30)/10 ); sigma0 = 1e-8;
@@ -510,12 +537,17 @@ end
 
 H_eff = H_eff /sqrt(sigma0);
 
+% Stage III：数字波束 + 功分优化（不计入信道/等效信道生成时间）
+t_stage3 = tic;
+
 % 初始化优化参数
 norm_coff = 1;
 psi1 = 0.05 * randn(K,K) + 0.05j * randn(K,K);   psi2 = 0.01 * rand(K,1) + 0.01j * rand(K,1) ;
 rho  = 0.01 * rand(K,1); %功率分割因子,rho用于传能，(1-rho)用于通信
 P_out_ite = [];
 for ite_num = 1:20
+iter_stage3_AO_cnt = iter_stage3_AO_cnt + 1;
+run_stats.cvx_calls_stage3 = run_stats.cvx_calls_stage3 + 1;
 
 %% 优化数能性能
 cvx_begin
@@ -571,12 +603,22 @@ for  iiiii = 2
 
     R00 = (iiiii-1) * 1;
 
-    [P_ave(iiiii)] = fun_run_R00( R00 , H_eff , rho , psi1 , psi2_fixed , sigma0 , Ptx , B , K );
+    [P_ave(iiiii), fp_hist] = fun_run_R00( R00 , H_eff , rho , psi1 , psi2_fixed , sigma0 , Ptx , B , K );
+    if isstruct(fp_hist) && isfield(fp_hist,'fp_iters')
+        iter_stage3_FP_cnt = fp_hist.fp_iters;
+    end
+    if isstruct(fp_hist) && isfield(fp_hist,'cvx_calls')
+        run_stats.cvx_calls_stage3 = run_stats.cvx_calls_stage3 + fp_hist.cvx_calls;
+    end
 
 
 end
 
 P_out = P_ave(end)*sigma0;
+run_stats.time_stage3_ms = toc(t_stage3) * 1000;
+run_stats.iter_stage3_AO = iter_stage3_AO_cnt;
+run_stats.iter_stage3_FP = iter_stage3_FP_cnt;
+run_stats.cvx_calls_total = run_stats.cvx_calls_stage2 + run_stats.cvx_calls_stage3;
 break;
 end
 end
